@@ -15,14 +15,14 @@ INPUT_DIR=/mnt/data/toarchive/
 TAPE_ID_FILE=$INPUT_DIR/tape_id
 
 # Logging directory
-LOG_BASE=/var/log/tape
+LOG_BASE=/var/log/archiving
 
 # Tape device (nst0 for non-rewind rather than st0)
 TAPE="/dev/nst0"
 
 # Archive logfile and contents files
-LOGFILE=$LOGBASE/tape.log
-CONTENTS=$LOGBASE/tapes/$TAPE_ID.csv
+LOG_FILE=$LOG_BASE/tape.log
+CONTENTS=$LOG_BASE/tapes/$TAPE_ID.csv
 
 # Path to binaries
 TAR=/bin/tar
@@ -52,7 +52,7 @@ log(){
 # ------------------------------------------------------------------------
 
 # Set up stdout + stderr to logfile, and /dev/fd/3 to console
-exec 3>&1 1>>${LOGFILE} 2>&1
+exec 3>&1 1>>${LOG_FILE} 2>&1
 
 # First, let's try writing to the logfile.
-log("Hey")
+log "Starting archive process."

@@ -41,7 +41,6 @@ next_dir(){
 	OLDEST_DIR=$(find . -maxdepth 1 -type d -printf '%T@\t%p\n' | sort -r | tail -n 1 | sed 's/[0-9]*\.[0-9]*\t//')
 	DIRSIZE=$(du -sb $OLDEST_DIR | cut -f1)
 	debug "$OLDEST_DIR is $DIRSIZE bytes"
-	return
 }
 
 # Logs input to console and to file.
@@ -51,12 +50,26 @@ log(){
 	echo "$NOW: $1" | tee /dev/fd/3
 }
 
-# Debug level
+# Debug level logging
 debug(){
-	if [[ $DEBUG ]]; then
-		log $1
+	if $DEBUG; then
+		log "Debug: $1"
 	fi
 }
+
+error_exit()
+{
+	log "Aborting: $1"
+	exit 1
+}
+
+error_eject()
+{
+	log "Ejecting and aborting: $1"
+	$MT -f $TAPE eject
+	exit 1
+}
+
 
 # ------------------------------------------------------------------------
 # Main script logic
@@ -68,11 +81,27 @@ exec 3>&1 1>>${LOG_FILE} 2>&1
 # First, let's try writing to the logfile.
 log "Starting archive process."
 
-pushd $INPUT_DIR
+OLD=$(pwd)
+
+cd $INPUT_DIR || error_exit "Cannot change directory to $INPUT_DIR"
+
+log "Advancing to end of tape..."
+$MT -f $TAPE eom || error_eject "Cannot advance to end of tape"
 
 while next_dir; do
-	log $NEXT_DIR
-	# log "Next directory: $ND"
+	log "Backing up $OLDEST_DIR..."
+	TAR_STDERR=$($TAR -cvf $TAPE --totals $OLDEST_DIR 2>&1 > /dev/tty || error_eject "Cannot perform backup")
+        log "$OLDEST_DIR complete. $TAR_STDERR"
+
+	# Now let's check to see if the size of the previous tar archive is correct
+        TOTALBYTES=$(echo $TAR_STDERR | grep "Total bytes written: " | grep -Eo '[0-9]{1,}' | head -1)
+	if [ "$TOTALBYTES" -ge "$DIRSIZE" ]; then
+		debug "Successful backup; total $TOTALBYTES is greater than $DIRSIZE"
+		rm -r $OLDEST_DIR
+	else
+		error_eject "FAIL. Total $TOTALBYTES is not greater than $DIRSIZE"
+	fi
 done
 
-popd
+log "Archive complete."
+cd $OLD
